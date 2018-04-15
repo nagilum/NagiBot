@@ -5,8 +5,8 @@ using Newtonsoft.Json;
 
 namespace NagiBot {
     public class Program {
-        private static Config Config { get; set; }
-        private static Bot Bot { get; set; }
+        public static Config Config { get; set; }
+        public static Bot Bot { get; set; }
 
         private static void Main(string[] args) {
             var configFile = args.Any()
@@ -39,7 +39,7 @@ namespace NagiBot {
             Console.WriteLine("Press CTRL+C to abort.");
 
             try {
-                Bot = new Bot(Config);
+                Bot = new Bot();
 
                 if (Bot == null) {
                     throw new Exception("Unable to initialize the bot");

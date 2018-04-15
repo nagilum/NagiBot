@@ -2,12 +2,7 @@
 
 namespace NagiBot {
     public class Bot {
-        public Config Config { get; set; }
         private IRC IRC { get; set; }
-
-        public Bot(Config config) {
-            this.Config = config;
-        }
 
         #region Public Methods
 
@@ -16,9 +11,9 @@ namespace NagiBot {
         /// </summary>
         public void Connect() {
             this.IRC = new IRC(
-                this.Config.Nickname,
-                this.Config.Password,
-                this.Config.Channel);
+                Program.Config.Nickname,
+                Program.Config.Password,
+                Program.Config.Channel);
 
             if (this.IRC == null) {
                 throw new Exception("Could not initialize IRC client");
@@ -37,9 +32,9 @@ namespace NagiBot {
         /// 
         /// </summary>
         public void Disconnect() {
-            this.IRC.WriteToChannel(Config.Channel, "is going offline");
+            this.IRC.WriteToChannel(Program.Config.Channel, "is going offline");
 
-            this.IRC.WriteToClient(string.Format("PART #{0}", Config.Channel));
+            this.IRC.WriteToClient(string.Format("PART #{0}", Program.Config.Channel));
             this.IRC.WriteToClient("QUIT");
 
             this.IRC.Disconnect();
@@ -57,7 +52,12 @@ namespace NagiBot {
         private void IrcOnChannelMessage(object sender, IRC.ChannelMessageEventArgs e) {
             // Check for dot-command.
             if (this.HandleDotCommand(e)) {
-                // Do Nothing..
+                // Do nothing..
+            }
+
+            // Check for user-command.
+            else if (this.HandleUserCommand(e)) {
+                // Do nothing..
             }
         }
 
@@ -68,7 +68,7 @@ namespace NagiBot {
         /// <param name="e"></param>
         private void IrcOnConnected(object sender, EventArgs e) {
             this.IRC.WriteToChannel(
-                this.Config.Channel,
+                Program.Config.Channel,
                 "is online");
         }
 
@@ -126,14 +126,14 @@ namespace NagiBot {
         /// <param name="e"></param>
         /// <returns></returns>
         public bool HandleDotCommand(IRC.ChannelMessageEventArgs e) {
-            if (!string.Equals(e.Nickname, this.Config.Channel) ||
-                !e.Message.StartsWith("@" + this.Config.Nickname)) {
+            if (!string.Equals(e.Nickname, Program.Config.Channel) ||
+                !e.Message.StartsWith("@" + Program.Config.Nickname)) {
 
                 return false;
             }
 
             var message = e.Message
-                .Substring(this.Config.Nickname.Length + 2)
+                .Substring(Program.Config.Nickname.Length + 2)
                 .Trim();
 
             if (!message.StartsWith(".")) {
@@ -169,6 +169,57 @@ namespace NagiBot {
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        public bool HandleUserCommand(IRC.ChannelMessageEventArgs e) {
+            if (!e.Message.StartsWith("!")) {
+                return false;
+            }
+
+            var sections = e.Message.Split(' ');
+
+            if (sections[0] == "!help") {
+                foreach (var inst in BotModule.GetAll<IBotModule>()) {
+                    foreach (var command in inst.AvailableCommands(this.IRC)) {
+                        this.IRC.WriteToChannel(
+                            e.Channel,
+                            string.Format(
+                                " {0} - {1}",
+                                command.Key,
+                                command.Value));
+                    }
+                }
+
+                return true;
+            }
+
+            foreach (var inst in BotModule.GetAll<IBotModule>()) {
+                var found = false;
+
+                foreach (var command in inst.AvailableCommands(this.IRC)) {
+                    if (sections[0] != "!" + command.Key) {
+                        continue;
+                    }
+
+                    found = true;
+                    break;
+                }
+
+                if (!found) {
+                    continue;
+                }
+
+                if (inst.HandleUserCommand(this.IRC, e)) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         #endregion
